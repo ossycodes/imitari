@@ -20,43 +20,24 @@ app.param("image", (req, res, next, image) => {
     return next();
 });
 
-app.param("width", (req, res, next, width) => {
-    //we had + in front of width to cast width to number type
-    req.width = +width;
-
-    return next();
-});
-
-app.param("height", (req, res, next, height) => {
-    ////we had + in front of height to cast width to number type
-    req.height = +height;
-
-    return next();
-});
-
-app.param("greyscale", (req, res, next, greyscale) => {
-    if (greyscale != "bw") {
-        return next("route");
-    }
-
-    req.greyscale = true;
-
-    return next();
-});
-
 function download_image(req, res) {
     fs.access(req.localpath, fs.constants.R_OK, (err) => {
         if (err) {
             return res.status(404).end();
         }
 
+        
         let image = sharp(req.localpath);
+        let width = +req.query.width;
+        let height = +req.query.height;
+        let greyscale = ["y", "yes", "1", "on"].includes(req.query.greyscale);
+        
 
-        if (req.width && req.height) {
+        if (width > 0 && height > 0) {
             /**
              * no more ignoreAspectRatio, instead use the below
              */
-            image.resize(req.width, req.height, {
+            image.resize(width, height, {
                 // kernel: sharp.kernel.nearest,
                 fit: 'fill',
                 // position: 'right top',
@@ -64,11 +45,11 @@ function download_image(req, res) {
             });
         }
 
-        if (req.width || req.height) {
-            image.resize(req.width, req.height);
+        if (width > 0 || height > 0) {
+            image.resize(width || null, height || null);
         }
 
-        if (req.greyscale) {
+        if (greyscale) {
             image.greyscale();
         }
 
@@ -119,13 +100,14 @@ app.head("/uploads/:image", (req, res) => {
     )
 });
 
-app.get("/uploads/:width(\\d+)x:height(\\d+)-:greyscale-:image", download_image);
-app.get("/uploads/:width(\\d+)x:height(\\d+)-:image", download_image);
-app.get("/uploads/_x:height(\\d+)-:greyscale-:image", download_image);
-app.get("/uploads/_x:height(\\d+)-:image", download_image);
-app.get("/uploads/:width(\\d+)x_-:greyscale-:image", download_image);
-app.get("/uploads/:width(\\d+)x_-:image", download_image);
-app.get("/uploads/:greyscale-:image", download_image);
+// app.get("/uploads/:width(\\d+)x:height(\\d+)-:greyscale-:image", download_image);
+// app.get("/uploads/:width(\\d+)x:height(\\d+)-:image", download_image);
+// app.get("/uploads/_x:height(\\d+)-:greyscale-:image", download_image);
+// app.get("/uploads/_x:height(\\d+)-:image", download_image);
+// app.get("/uploads/:width(\\d+)x_-:greyscale-:image", download_image);
+// app.get("/uploads/:width(\\d+)x_-:image", download_image);
+// app.get("/uploads/:greyscale-:image", download_image);
+
 app.get("/uploads/:image", download_image);
 
 // app.get("/uploads/:image", (req, res) => {
@@ -155,13 +137,13 @@ app.get("/uploads/:image", download_image);
 
 app.get(/\/thumbnail\.(jpg|png)/, (req, res, next) => {
     let format = (req.params[0] == "png" ? "png" : "jpeg");
-    let width = parseInt(req.query.width) || 300;
-    let height = parseInt(req.query.height) || 200;
-    let border = parseInt(req.query.border) || 5;
+    let width = +req.query.width || 300;
+    let height = +req.query.height || 200;
+    let border = +req.query.border || 5;
     let bgcolor = req.query.bgcolor || "#fcfcfc";
     let fgcolor = req.query.fgcolor || "#ddd";
     let textcolor = req.query.textcolor || "#aaa";
-    let textsize = parseInt(req.query.textsize) || 24;
+    let textsize = +req.query.textsize || 24;
 
     //this creates an empty image using sharp
     let image = sharp({
