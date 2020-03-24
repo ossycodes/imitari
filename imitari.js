@@ -16,17 +16,17 @@ db.connect((err) => {
 
 db.query(
     `CREATE TABLE IF NOT EXISTS images
-    (
-        id INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
-        date_created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        date_used TIMESTAMP NULL DEFAULT NULL,
-        name VARCHAR(300) NOT NULL,
-        size INT(11) UNSIGNED NOT NULL,
-        data LONGBLOB NOT NULL,
+        (
+            id INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
+            date_created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            date_used TIMESTAMP NULL DEFAULT NULL,
+            name VARCHAR(300) NOT NULL,
+            size INT(11) UNSIGNED NOT NULL,
+            data LONGBLOB NOT NULL,
 
-        PRIMARY KEY (id),
-        UNIQUE KEY name (name)
-    )
+            PRIMARY KEY (id),
+            UNIQUE KEY name (name)
+        )
     ENGINE=InnoDB DEFAULT CHARSET=utf8`
 );
 
@@ -37,8 +37,7 @@ db.query(
 //additional information from a database or another server
 app.param("image", (req, res, next, image) => {
     if (!image.match(/\.(png|jpg)$/i)) {
-        //put POST in "", dude didn't do that o.
-        return res.status(req.method == "POST" ? 403 : 404).end();
+        return res.status(403).send();
     }
 
     db.query("SELECT * FROM images WHERE name = ?", [image], (err, images) => {
@@ -51,72 +50,6 @@ app.param("image", (req, res, next, image) => {
         return next();
     });
 });
-
-function download_image(req, res) {
-
-        let image = sharp(req.image.data);
-        let width = +req.query.width;
-        let height = +req.query.height;
-        let blur = +req.query.blur;
-        let sharpen = +req.query.sharpen;
-        let greyscale = ["y", "yes", "1", "on"].includes(req.query.greyscale);
-        let flip = ["y", "yes", "1", "on"].includes(req.query.flip);
-        let flop = ["y", "yes", "1", "on"].includes(req.query.flop);
-
-        if (width > 0 && height > 0) {
-            /**
-             * no more ignoreAspectRatio, instead use the below
-             */
-            image.resize(width, height, {
-                // kernel: sharp.kernel.nearest,
-                fit: 'fill',
-                // position: 'right top',
-                // background: { r: 255, g: 255, b: 255, alpha: 0.5 }
-            });
-        }
-
-        if (width > 0 || height > 0) {
-            image.resize(width || null, height || null);
-        }
-
-
-        if (flip) {
-            image.flip();
-        }
-
-        if (flop) {
-            image.flop();
-        }
-
-        if (blur) {
-            if (blur > 1000) {
-                res.status(400).send({
-                    error: "blur as to be a Number value between 0.3 and 1000"
-                });
-            }
-            image.blur(blur);
-        }
-
-        if (sharpen > 0) {
-            image.sharpen(sharpen);
-        }
-
-        if (greyscale) {
-            image.greyscale();
-        }
-
-        // image.rotate(-240);
-
-        db.query(
-            "UPDATE images " +
-            "SET date_used =  UTC_TIMESTAMP " +
-            "WHERE id = ?", [req.image.id]
-        );
-
-        res.setHeader("Content-Type", "image/" + path.extname(req.image.name).substr(1));
-
-        image.pipe(res);
-}
 
 
 app.post("/uploads/:name", bodyparser.raw({
@@ -151,18 +84,23 @@ app.head("/uploads/:image", (req, res) => {
     return res.status(200).end();
 });
 
-// app.get("/uploads/:width(\\d+)x:height(\\d+)-:greyscale-:image", download_image);
-// app.get("/uploads/:width(\\d+)x:height(\\d+)-:image", download_image);
-// app.get("/uploads/_x:height(\\d+)-:greyscale-:image", download_image);
-// app.get("/uploads/_x:height(\\d+)-:image", download_image);
-// app.get("/uploads/:width(\\d+)x_-:greyscale-:image", download_image);
-// app.get("/uploads/:width(\\d+)x_-:image", download_image);
-// app.get("/uploads/:greyscale-:image", download_image);
-// app.get("/uploads/:image", download_image);
-
 app.get("/uploads/:image", (req, res) => {
 
+    if (Object.keys(req.query).length === 0) {
+        db.query(
+            "UPDATE images " +
+            "SET date_used = UTC_TIMESTAMP " +
+            "WHERE id = ?",
+            [req.image.id]
+        );
+
+        res.setHeader("Content-Type", "image/" + path.extname(req.image.name).substr(1));
+        
+        return res.send(req.image.data);
+    }
+
     let image = sharp(req.image.data);
+
     let width = +req.query.width;
     let height = +req.query.height;
     let blur = +req.query.blur;
@@ -187,7 +125,6 @@ app.get("/uploads/:image", (req, res) => {
         image.resize(width || null, height || null);
     }
 
-
     if (flip) {
         image.flip();
     }
@@ -196,12 +133,12 @@ app.get("/uploads/:image", (req, res) => {
         image.flop();
     }
 
-    if (blur) {
-        if (blur > 1000) {
-            res.status(400).send({
-                error: "blur as to be a Number value between 0.3 and 1000"
-            });
-        }
+    if (blur > 0.3 && blur < 1000) {
+        // if (blur > 1000) {
+        //     res.status(400).send({
+        //         error: "blur as to be a Number value between 0.3 and 1000"
+        //     });
+        // }
         image.blur(blur);
     }
 
@@ -313,10 +250,12 @@ setInterval(() => {
     //deletes images that were not used in the past month(but where used before)
     //or images that were not used in the past week(and never used before)
     db.query("DELETE FROM images " +
-    "WHERE (date_created < UTC_TIMESTAMP - INTERVAL 1 WEEK AND date_used IS NULL)" +
-    " OR (date_used < UTC_TIMESTAMP - INTERVAL 1 MONTH");
+        "WHERE (date_created < UTC_TIMESTAMP - INTERVAL 1 WEEK AND date_used IS NULL)" +
+        " OR (date_used < UTC_TIMESTAMP - INTERVAL 1 MONTH");
 }, 360 * 1000);
 
 app.listen(3000, () => {
     console.log("Ready");
 });
+
+module.exports = app;
