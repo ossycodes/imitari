@@ -4,6 +4,32 @@ const app = express();
 const bodyparser = require("body-parser");
 const path = require("path");
 const fs = require("fs");
+const setting = require("./settings");
+const mysql = require("mysql");
+const db = mysql.createConnection(setting.db);
+
+db.connect((err) => {
+    if (err) throw err;
+
+    console.log("db: ready");
+})
+
+db.query(
+    `CREATE TABLE IF NOT EXISTS images
+    (
+        id INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
+        date_created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        date_used TIMESTAMP NULL DEFAULT NULL,
+        name VARCHAR(300) NOT NULL,
+        size INT(11) UNSIGNED NOT NULL,
+        data LONGBLOB NOT NULL,
+
+        PRIMARY KEY (id),
+        UNIQUE KEY name (name)
+    )
+    ENGINE=InnoDB DEFAULT CHARSET=utf8`
+);
+
 
 //route parameters - They allow us pre-process any route that uses
 //a parameter and check whether it's valid 
@@ -11,23 +37,24 @@ const fs = require("fs");
 //additional information from a database or another server
 app.param("image", (req, res, next, image) => {
     if (!image.match(/\.(png|jpg)$/i)) {
-        return res.status(req.method == POST ? 403 : 404).end();
+        //put POST in "", dude didn't do that o.
+        return res.status(req.method == "POST" ? 403 : 404).end();
     }
 
-    req.image = image;
-    req.localpath = path.join(__dirname, "uploads", req.image);
-
-    return next();
-});
-
-function download_image(req, res) {
-    fs.access(req.localpath, fs.constants.R_OK, (err) => {
-        if (err) {
+    db.query("SELECT * FROM images WHERE name = ?", [image], (err, images) => {
+        if (err || !images.length) {
             return res.status(404).end();
         }
 
+        req.image = images[0];
 
-        let image = sharp(req.localpath);
+        return next();
+    });
+});
+
+function download_image(req, res) {
+
+        let image = sharp(req.image.data);
         let width = +req.query.width;
         let height = +req.query.height;
         let blur = +req.query.blur;
@@ -61,46 +88,59 @@ function download_image(req, res) {
             image.flop();
         }
 
-        if (blur > 0) {
+        if (blur) {
+            if (blur > 1000) {
+                res.status(400).send({
+                    error: "blur as to be a Number value between 0.3 and 1000"
+                });
+            }
             image.blur(blur);
         }
 
         if (sharpen > 0) {
             image.sharpen(sharpen);
         }
-        
+
         if (greyscale) {
             image.greyscale();
         }
 
-        res.setHeader("Content-Type", "image/" + path.extname(req.image).substr(1));
+        // image.rotate(-240);
+
+        db.query(
+            "UPDATE images " +
+            "SET date_used =  UTC_TIMESTAMP " +
+            "WHERE id = ?", [req.image.id]
+        );
+
+        res.setHeader("Content-Type", "image/" + path.extname(req.image.name).substr(1));
 
         image.pipe(res);
-    })
 }
 
 
-app.post("/uploads/:image", bodyparser.raw({
+app.post("/uploads/:name", bodyparser.raw({
     limit: "10mb",
     type: "image/*"
 }), (req, res) => {
 
-    //create a stream to the local file where we'll save our image
-    //the name of the file will be the name of our image
-    let fd = fs.createWriteStream(path.join(req.localpath), {
-        flags: "w+",
-        encoding: "binary"
+    db.query("INSERT INTO images SET ?", {
+        name: req.params.name,
+        size: req.body.length,
+        data: req.body
+    }, (err) => {
+        if (err) {
+            return res.send({
+                status: "error",
+                "code": err.code
+            });
+        }
+
+        res.send({
+            status: "ok",
+            size: req.body.length
+        });
     });
-
-    //we write the image(which is stored in the body, 
-    //thanks to body-parser module ) 
-    //to the file
-    fd.end(req.body);
-
-    //close the file stream
-    fd.on("close", () => {
-        res.send({ status: "ok", size: req.body.length });
-    })
 });
 
 //the HEAD verb is just like a GET request
@@ -108,16 +148,7 @@ app.post("/uploads/:image", bodyparser.raw({
 //it is used to request only 
 //informational(headers) from a path
 app.head("/uploads/:image", (req, res) => {
-    //check if the current process has 
-    //read access to the local file
-    fs.access(
-        path.join(req.localpath),
-        fs.constants.R_OK,
-        (err) => {
-            res.status(err ? 404 : 200);
-            res.end();
-        }
-    )
+    return res.status(200).end();
 });
 
 // app.get("/uploads/:width(\\d+)x:height(\\d+)-:greyscale-:image", download_image);
@@ -127,33 +158,98 @@ app.head("/uploads/:image", (req, res) => {
 // app.get("/uploads/:width(\\d+)x_-:greyscale-:image", download_image);
 // app.get("/uploads/:width(\\d+)x_-:image", download_image);
 // app.get("/uploads/:greyscale-:image", download_image);
+// app.get("/uploads/:image", download_image);
 
-app.get("/uploads/:image", download_image);
+app.get("/uploads/:image", (req, res) => {
 
-// app.get("/uploads/:image", (req, res) => {
-//     //check if the image extention is .png or jpg
-//     //if not we return 404 (not found) response.
-//     if (!ext.match(/^\.(png|jpg)$/)) {
-//         return res.status(404).end();
-//     }
+    let image = sharp(req.image.data);
+    let width = +req.query.width;
+    let height = +req.query.height;
+    let blur = +req.query.blur;
+    let sharpen = +req.query.sharpen;
+    let greyscale = ["y", "yes", "1", "on"].includes(req.query.greyscale);
+    let flip = ["y", "yes", "1", "on"].includes(req.query.flip);
+    let flop = ["y", "yes", "1", "on"].includes(req.query.flop);
 
-//     //create readable stream to the image file path
-//     let fd = fs.createReadStream(path.join(__dirname, "uploads", req.params.image));
+    if (width > 0 && height > 0) {
+        /**
+         * no more ignoreAspectRatio, instead use the below
+         */
+        image.resize(width, height, {
+            // kernel: sharp.kernel.nearest,
+            fit: 'fill',
+            // position: 'right top',
+            // background: { r: 255, g: 255, b: 255, alpha: 0.5 }
+        });
+    }
 
-//     //error handler to ctahc any errors when reading the local file.
-//     fd.on("error", (e) => {
-//         res.status(e.code === "ENOENT" ? 404 : 500).end();
-//     });
+    if (width > 0 || height > 0) {
+        image.resize(width || null, height || null);
+    }
 
-//     //set content type returned to the user, in order to 
-//     //identify the image tyoe we're sending.
-//     res.setHeader("Content-Type", "image/" + req.image.substr(1));
 
-//     //triggers reads from the file stream and write them to the response
-//     //after the whole file as been read the resposne is ended automatically
-//     fd.pipe(res);
-// });
+    if (flip) {
+        image.flip();
+    }
 
+    if (flop) {
+        image.flop();
+    }
+
+    if (blur) {
+        if (blur > 1000) {
+            res.status(400).send({
+                error: "blur as to be a Number value between 0.3 and 1000"
+            });
+        }
+        image.blur(blur);
+    }
+
+    if (sharpen > 0) {
+        image.sharpen(sharpen);
+    }
+
+    if (greyscale) {
+        image.greyscale();
+    }
+
+    // image.rotate(-240);
+
+    db.query(
+        "UPDATE images " +
+        "SET date_used =  UTC_TIMESTAMP " +
+        "WHERE id = ?", [req.image.id]
+    );
+
+    res.setHeader("Content-Type", "image/" + path.extname(req.image.name).substr(1));
+
+    image.pipe(res);
+});
+
+app.delete("/uploads/:image", (req, res) => {
+    db.query("DELETE FROM images WHERE id =?", [req.image.id],
+        (err) => {
+            return res.status(err ? 500 : 200).end();
+        });
+});
+
+app.get("/stats", (req, res) => {
+
+    db.query("SELECT COUNT(*) total" +
+        ", SUM(size) size " +
+        ", MAX(date_created) last_used " +
+        "FROM images",
+
+        (err, rows) => {
+            if (err) {
+                return res.status(500).end();
+            }
+
+            rows[0].uptime = process.uptime();
+
+            return res.send(rows[0]);
+        });
+});
 
 app.get(/\/thumbnail\.(jpg|png)/, (req, res, next) => {
     let format = (req.params[0] == "png" ? "png" : "jpeg");
@@ -207,10 +303,19 @@ app.get(/\/thumbnail\.(jpg|png)/, (req, res, next) => {
 
     );
 
-    //     //we then overlay the SVG on our empty image, and output the result to the user
+    //we then overlay the SVG on our empty image, and output the result to the user
     image.composite([{ input: thumbnail }])[format]().pipe(res)
 
 });
+
+
+setInterval(() => {
+    //deletes images that were not used in the past month(but where used before)
+    //or images that were not used in the past week(and never used before)
+    db.query("DELETE FROM images " +
+    "WHERE (date_created < UTC_TIMESTAMP - INTERVAL 1 WEEK AND date_used IS NULL)" +
+    " OR (date_used < UTC_TIMESTAMP - INTERVAL 1 MONTH");
+}, 360 * 1000);
 
 app.listen(3000, () => {
     console.log("Ready");
