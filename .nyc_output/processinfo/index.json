@@ -1,1 +1,35 @@
-{"processes":{"37ae63c0-3dcf-4035-a16c-b980080b8c0c":{"parent":"f1c532af-1071-457c-8205-58ed6b4a4ce3","children":[]},"f1c532af-1071-457c-8205-58ed6b4a4ce3":{"parent":null,"children":["37ae63c0-3dcf-4035-a16c-b980080b8c0c"]},"f83a43d5-8ff0-435e-b2a3-a20b200cb378":{"parent":null,"children":[]}},"files":{"C:\\Users\\Home\\Desktop\\NODEJS APPLICATIONS\\Imitari(Image-Microservice)\\imitari.js":["37ae63c0-3dcf-4035-a16c-b980080b8c0c"]},"externalIds":{}}
+{
+    "processes": {
+        "3409bbca-8482-4794-af3b-da9cfa693ace": {
+            "parent": "c816acd2-746e-48b5-b0fc-bbd8c070d4c1",
+            "children": []
+        },
+        "885224ed-7978-4c41-89d9-130410e0c946": {
+            "parent": "ce4b30d6-8202-47ed-aa74-4e26e24db5c7",
+            "children": []
+        },
+        "ab8b6d40-d939-4293-aad2-e7458d780434": {
+            "parent": "c816acd2-746e-48b5-b0fc-bbd8c070d4c1",
+            "children": []
+        },
+        "c816acd2-746e-48b5-b0fc-bbd8c070d4c1": {
+            "parent": null,
+            "children": [
+                "3409bbca-8482-4794-af3b-da9cfa693ace",
+                "ab8b6d40-d939-4293-aad2-e7458d780434"
+            ]
+        },
+        "ce4b30d6-8202-47ed-aa74-4e26e24db5c7": {
+            "parent": null,
+            "children": [
+                "885224ed-7978-4c41-89d9-130410e0c946"
+            ]
+        }
+    },
+    "files": {
+        "C:\\Users\\Home\\Desktop\\NODEJS APPLICATIONS\\Imitari(Image-Microservice)\\imitari.js": [
+            "ab8b6d40-d939-4293-aad2-e7458d780434"
+        ]
+    },
+    "externalIds": {}
+}
