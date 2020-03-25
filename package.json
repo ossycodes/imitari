@@ -1,7 +1,7 @@
 {
-  "name": "imagini",
+  "name": "imitari",
   "version": "1.0.0",
-  "description": "description goes in here",
+  "description": "Image manipulation microservice",
   "main": "index.js",
   "scripts": {
     "test": "node test/run",
