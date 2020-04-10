@@ -1,0 +1,20 @@
+version: "3"
+networks:
+    imitari:
+services:
+    database:
+        image: mysql:5.7.22
+        networks:
+        - imitari
+        volumes:
+        - ${PWD}/mysql:/var/lib/mysql
+        environment:
+            MYSQL_DATABASE: imitari
+            MYSQL_ROOT_PASSWORD: 123456789
+    service:
+        image: imitari:0.0.6
+        networks:
+        - imitari
+        ports:
+        - "80:3000"
+        restart: on-failure
