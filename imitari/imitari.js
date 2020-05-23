@@ -5,14 +5,16 @@ const bodyparser = require("body-parser");
 const path = require("path");
 const mysql = require("mysql");
 // const db = mysql.createConnection(setting.db);
-const db = mysql.createConnection("mysql://root:123456789@database/imitari");
-// const db = mysql.createConnection("mysql://root:123456789@localhost/imitari");
+// const db = mysql.createConnection("mysql://root:123456789@database/imitari");
+const db = mysql.createConnection("mysql://root:123456789@localhost/imitari");
 
 app.db = db;
 
-async function runAppp() {
+db.connect((err) => {
+    if (err) throw err;
 
-    await db.connect();
+    console.log("connected");
+
     db.query(
         `CREATE TABLE IF NOT EXISTS images
         (
@@ -244,13 +246,11 @@ async function runAppp() {
             "   OR (date_used < UTC_TIMESTAMP - INTERVAL 1 MONTH)");
     }, 3600 * 1000);
 
-    app.listen(3000, () => {
-        console.log("Ready");
-    });
+    // app.listen(3000, () => {
+    //     console.log("Ready");
+    // });
 
-}
 
-runAppp();
-
+});
 
 module.exports = app;

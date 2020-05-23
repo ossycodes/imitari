@@ -1,5 +1,5 @@
 FROM node
-MAINTAINER Osaigbovo Emmanuel
+LABEL maintainer="osaigbovo Emmanuel"
 
 ADD imitari/imitari.js /opt/app/imitari.js
 ADD imitari/package.json /opt/app/package.json
